@@ -46,7 +46,7 @@ const onChange = (e) => {
 }
 
   return (
-    <div classname="profile">
+    <div className="profile">
       <header className="profileHeader">
         <p className="pageHeader">My profile</p>
         <button type="button" className="logOut" onClick={onLogout}>log out</button>
@@ -66,7 +66,8 @@ const onChange = (e) => {
           <form>
             <input type="text" id="name" className={!changeDetails ? 'profileName' : 'profileNameActive'} disabled={!changeDetails} value={name}
             onChange={onChange}/>
-            
+            <input type="text" id="email" className={!changeDetails ? 'profileEmail' : 'profileEmailActive'} disabled={!changeDetails} value={email}
+            onChange={onChange}/>
           </form>
         </div>
       </main>
