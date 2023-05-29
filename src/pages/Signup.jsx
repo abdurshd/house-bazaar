@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { getAuth, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { firebaseConfig } from '../firebase.config';
 import {doc, setDoc, serverTimestamp} from 'firebase/firestore'
 import { db } from '../firebase.config';
 import { ReactComponent as ArrowRightIcon } from '../assets/svg/keyboardArrowRightIcon.svg';
 import visibilityIcon from '../assets/svg/visibilityIcon.svg';
+import OAuth from '../components/OAuth';
 
 
 
@@ -83,7 +83,7 @@ const Signup = () => {
             </div>
           </form>
 
-          {/* Google auth */}
+          <OAuth/>
 
           <Link to='/signin' className="registerLink">Sign in</Link>
         </main>

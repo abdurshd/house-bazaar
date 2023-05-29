@@ -4,6 +4,7 @@ import {getAuth, signInWithEmailAndPassword} from 'firebase/auth'
 import { ReactComponent as ArrowRightIcon } from '../assets/svg/keyboardArrowRightIcon.svg'
 import visibilityIcon from '../assets/svg/visibilityIcon.svg'
 import { toast } from 'react-toastify'
+import OAuth from '../components/OAuth'
 
 
 const Signin = () => {
@@ -65,7 +66,7 @@ const onSubmit =  async (e) => {
             </div>
           </form>
 
-          {/* Google auth */}
+          <OAuth/>
 
           <Link to='/signup' className="registerLink">Sign up</Link>
         </main>
