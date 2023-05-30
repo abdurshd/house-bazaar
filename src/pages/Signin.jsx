@@ -49,7 +49,7 @@ const onSubmit =  async (e) => {
           <form onSubmit={onSubmit}>
             <input type="email" className="emailInput" placeholder="Email" id="email" value={email} onChange={onChange} />
             <div className="passwordInputDiv">
-              <input type={showPassword ? 'text' : 'password'} className="passwordInput" placeholder='Password' id="password" value={password} autocomplete="off" onChange={onChange} />
+              <input type={showPassword ? 'text' : 'password'} className="passwordInput" placeholder='Password' id="password" value={password} autoComplete="off" onChange={onChange} />
               <img src={visibilityIcon} alt="showPassword" className="showPassword" onClick={() => setShowPassword((prevState) => !prevState)}/>
             </div>
             <Link to="/forgot-password" className='forgotPasswordLink'>
