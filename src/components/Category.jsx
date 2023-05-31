@@ -7,8 +7,7 @@ import {
   where,
   orderBy,
   limit,
-  startAfter,
-} from 'firebase/firestore'
+  } from 'firebase/firestore'
 import { db } from '../firebase.config'
 import { toast } from 'react-toastify'
 import Spinner from './Spinner'

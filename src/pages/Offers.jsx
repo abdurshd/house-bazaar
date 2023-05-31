@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
 import {
   collection,
   getDocs,
@@ -7,7 +6,6 @@ import {
   where,
   orderBy,
   limit,
-  startAfter,
 } from 'firebase/firestore'
 import { db } from '../firebase.config'
 import { toast } from 'react-toastify'
@@ -20,7 +18,7 @@ function Offers() {
     const [listings, setListings] = useState(null)
     const [loading, setLoading] = useState(true)
 
-    const params = useParams()
+
 
   useEffect(() => {
     const fetchListings = async () => {
@@ -31,7 +29,7 @@ function Offers() {
         // Create a query
         const q = query(
           listingsRef,
-          where('offer', '==', 'true'),
+          where('offer', '==', true ),
           orderBy('timestamp', 'desc'),
           limit(10)
         )
@@ -63,7 +61,7 @@ function Offers() {
     <div className="category">
         <header>
             <p className="pageHeader">
-                {params.categoryName === 'rent' ? 'Places for rent' : 'Places for sale'}
+                Offers
             </p>
         </header>
         {loading ? (<Spinner/> ): listings && listings.length > 0 ? 
@@ -75,7 +73,7 @@ function Offers() {
                 ))}
             </ul>
         </main>
-        </>) : (<p> No listings for {params.categoryName}</p>)}
+        </>) : (<p> There are no offers yet</p>)}
       
     </div>
   )
