@@ -28,6 +28,8 @@ const auth = getAuth()
 const navigate = useNavigate()
 const isMounted = useRef(true)
 
+const REACT_APP_GOOGLE_API_KEY = process.env.REACT_APP_GOOGLE_API_KEY
+
 useEffect(() => {
     if(isMounted) {
         onAuthStateChanged(auth, (user)=>{
@@ -42,9 +44,10 @@ useEffect(() => {
     return () => {
         isMounted.current = false
     }
+// eslint-disable-next-line react-hooks/exhaustive-deps
 }, [isMounted])
 
-const onSubmit = (e) => {
+const onSubmit = async (e) => {
     e.preventDefault()
 
     if(discountedPrice >= regularPrice) {
@@ -58,6 +61,37 @@ const onSubmit = (e) => {
       toast.error('You can only upload 6 images')
       return
     }
+
+    let geolocation = {}
+    let location = ''
+
+    if(geoEnabled) {
+      const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${address}&key=${REACT_APP_GOOGLE_API_KEY}}`)
+
+      const data = await response.json()
+      geolocation.lat = data.results[0]?.geometry.location.lat ?? 0
+      geolocation.lng = data.results[0]?.geometry.location.lng ?? 0
+
+      location = data.status === 'ZERO_RESULTS' ? undefined : data.results[0]?.formatted_address
+
+      if(location === undefined) {
+        setLoading(false)
+        toast.error('You should enter correct address')
+        return
+      }
+
+      
+    } else {
+      geolocation.lat = latitude
+      geolocation.lng = longitude
+      location = address
+      console.log(geolocation, location)
+    }
+
+    const storeImage = async (image)  
+
+
+   setLoading(false)
 }
 
 const onMutate = (e) => {
