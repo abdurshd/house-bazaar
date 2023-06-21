@@ -1,11 +1,22 @@
-import { useState, useEffect, useRef } from "react"
-import {getAuth, onAuthStateChanged} from 'firebase/auth'
-import {useNavigate} from 'react-router-dom'
-import Spinner from "../components/Spinner"
-import {toast} from 'react-toastify'
-const Createlisting = () => {
-    const [loading, setLoading] = useState(false)
-    const [geoEnabled, setGeoEnabled] = useState(true)
+import { useState, useEffect, useRef } from 'react'
+import { getAuth, onAuthStateChanged } from 'firebase/auth'
+import {
+  getStorage,
+  ref,
+  uploadBytesResumable,
+  getDownloadURL,
+} from 'firebase/storage'
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
+import { db } from '../firebase.config'
+import { useNavigate } from 'react-router-dom'
+import { toast } from 'react-toastify'
+import { v4 as uuidv4 } from 'uuid'
+import Spinner from '../components/Spinner'
+
+function CreateListing() {
+  // eslint-disable-next-line
+  const [geolocationEnabled, setGeolocationEnabled] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     type: 'rent',
     name: '',
@@ -13,88 +24,165 @@ const Createlisting = () => {
     bathrooms: 1,
     parking: false,
     furnished: false,
-    address: '', 
+    address: '',
     offer: false,
     regularPrice: 0,
     discountedPrice: 0,
     images: {},
     latitude: 0,
-    longitude: 0
+    longitude: 0,
   })
 
-  const {type, name, bedrooms, bathrooms, parking, furnished, address, offer, regularPrice, discountedPrice, images, latitude, longitude} = formData;
-  
-const auth = getAuth()
-const navigate = useNavigate()
-const isMounted = useRef(true)
+  const {
+    type,
+    name,
+    bedrooms,
+    bathrooms,
+    parking,
+    furnished,
+    address,
+    offer,
+    regularPrice,
+    discountedPrice,
+    images,
+    latitude,
+    longitude,
+  } = formData
 
-const REACT_APP_GOOGLE_API_KEY = process.env.REACT_APP_GOOGLE_API_KEY
+  const auth = getAuth()
+  const navigate = useNavigate()
+  const isMounted = useRef(true)
 
-useEffect(() => {
-    if(isMounted) {
-        onAuthStateChanged(auth, (user)=>{
-            if (user) {
-                setFormData({...formData, userRef: user.uid})
-            } else {
-                navigate('/signin')
-            }
-        })
+  useEffect(() => {
+    if (isMounted) {
+      onAuthStateChanged(auth, (user) => {
+        if (user) {
+          setFormData({ ...formData, userRef: user.uid })
+        } else {
+          navigate('/signin')
+        }
+      })
     }
 
     return () => {
-        isMounted.current = false
+      isMounted.current = false
     }
-// eslint-disable-next-line react-hooks/exhaustive-deps
-}, [isMounted])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMounted])
 
-const onSubmit = async (e) => {
+  const onSubmit = async (e) => {
     e.preventDefault()
 
-    if(discountedPrice >= regularPrice) {
+    setLoading(true)
+
+    if (discountedPrice >= regularPrice) {
       setLoading(false)
-      toast.error('Discounted price must be lower than regular price')
-      return 
+      toast.error('Discounted price needs to be less than regular price')
+      return
     }
 
-    if(images.length > 6 ) {
+    if (images.length > 6) {
       setLoading(false)
-      toast.error('You can only upload 6 images')
+      toast.error('Max 6 images')
       return
     }
 
     let geolocation = {}
-    let location = ''
+    let location
 
-    if(geoEnabled) {
-      const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${address}&key=${REACT_APP_GOOGLE_API_KEY}}`)
+    if (geolocationEnabled) {
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${address}&key=${process.env.REACT_APP_GEOCODE_API_KEY}`
+      )
 
       const data = await response.json()
+
       geolocation.lat = data.results[0]?.geometry.location.lat ?? 0
       geolocation.lng = data.results[0]?.geometry.location.lng ?? 0
 
-      location = data.status === 'ZERO_RESULTS' ? undefined : data.results[0]?.formatted_address
+      location =
+        data.status === 'ZERO_RESULTS'
+          ? undefined
+          : data.results[0]?.formatted_address
 
-      if(location === undefined) {
+      if (location === undefined || location.includes('undefined')) {
         setLoading(false)
-        toast.error('You should enter correct address')
+        toast.error('Please enter a correct address')
         return
       }
-
-      
     } else {
       geolocation.lat = latitude
       geolocation.lng = longitude
-      location = address
-      console.log(geolocation, location)
     }
 
-    const storeImage = async (image)  
+    // Store image in firebase
+    const storeImage = async (image) => {
+      return new Promise((resolve, reject) => {
+        const storage = getStorage()
+        const fileName = `${auth.currentUser.uid}-${image.name}-${uuidv4()}`
 
+        const storageRef = ref(storage, 'images/' + fileName)
 
-   setLoading(false)
-}
+        const uploadTask = uploadBytesResumable(storageRef, image)
 
-const onMutate = (e) => {
+        uploadTask.on(
+          'state_changed',
+          (snapshot) => {
+            const progress =
+              (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+            console.log('Upload is ' + progress + '% done')
+            switch (snapshot.state) {
+              case 'paused':
+                console.log('Upload is paused')
+                break
+              case 'running':
+                console.log('Upload is running')
+                break
+              default:
+                break
+            }
+          },
+          (error) => {
+            reject(error)
+          },
+          () => {
+            // Handle successful uploads on complete
+            // For instance, get the download URL: https://firebasestorage.googleapis.com/...
+            getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
+              resolve(downloadURL)
+            })
+          }
+        )
+      })
+    }
+
+    const imgUrls = await Promise.all(
+      [...images].map((image) => storeImage(image))
+    ).catch(() => {
+      setLoading(false)
+      toast.error('Images not uploaded')
+      return
+    })
+
+    const formDataCopy = {
+      ...formData,
+      imgUrls,
+      geolocation,
+      timestamp: serverTimestamp(),
+    }
+
+    formDataCopy.location = address
+    delete formDataCopy.images
+    delete formDataCopy.address
+    !formDataCopy.offer && delete formDataCopy.discountedPrice
+
+    const docRef = await addDoc(collection(db, 'listinglar'), formDataCopy)
+    setLoading(false)
+    toast.success('Listing saved')
+    navigate(`/category/${formDataCopy.type}/${docRef.id}`)
+  }
+
+  const onMutate = (e) => {
     let boolean = null
 
     if (e.target.value === 'true') {
@@ -111,6 +199,7 @@ const onMutate = (e) => {
         images: e.target.files,
       }))
     }
+    
 
     // Text/Booleans/Numbers
     if (!e.target.files) {
@@ -121,31 +210,55 @@ const onMutate = (e) => {
     }
   }
 
-if(loading) {
-    return <Spinner/>
-}
+  if (loading) {
+    return <Spinner />
+  }
 
-    return (
-    <div className="profile">
-        <header>
-            <p className="pageHeader">
-                Create listing
-            </p>
-        </header>
-        <main>
-            <form onSubmit={onSubmit}>
-                <label className="formLabel"> Sell / Rent</label>
-                <div className="formButtons">
-                    <button type="button" className={type === 'sale'? 'formButtonActive' : 'formButton'} id='type' value='sale' onClick={onMutate}>Sell</button>
-                    <button type="button" className={type === 'rent'? 'formButtonActive' : 'formButton'} id='type' value='rent' onClick={onMutate}>Rent</button>
-                </div>
-                <label className="formLabel">Name</label>
-                <input className="formInputName" type="text" id="name" value={name} onChange={onMutate} maxLength='32' minLength='10' required>
-                </input>
+  return (
+    <div className='profile'>
+      <header>
+        <p className='pageHeader'>Create a Listing</p>
+      </header>
 
-            <div className='formRooms flex'>
+      <main>
+        <form onSubmit={onSubmit}>
+          <label className='formLabel'>Sell / Rent</label>
+          <div className='formButtons'>
+            <button
+              type='button'
+              className={type === 'sale' ? 'formButtonActive' : 'formButton'}
+              id='type'
+              value='sale'
+              onClick={onMutate}
+            >
+              Sell
+            </button>
+            <button
+              type='button'
+              className={type === 'rent' ? 'formButtonActive' : 'formButton'}
+              id='type'
+              value='rent'
+              onClick={onMutate}
+            >
+              Rent
+            </button>
+          </div>
+
+          <label className='formLabel'>Name</label>
+          <input
+            className='formInputName'
+            type='text'
+            id='name'
+            value={name}
+            onChange={onMutate}
+            maxLength='32'
+            minLength='10'
+            required
+          />
+
+          <div className='formRooms flex'>
             <div>
-            <label className='formLabel'>Bedrooms</label>
+              <label className='formLabel'>Bedrooms</label>
               <input
                 className='formInputSmall'
                 type='number'
@@ -171,6 +284,7 @@ if(loading) {
               />
             </div>
           </div>
+
           <label className='formLabel'>Parking spot</label>
           <div className='formButtons'>
             <button
@@ -196,6 +310,7 @@ if(loading) {
               No
             </button>
           </div>
+
           <label className='formLabel'>Furnished</label>
           <div className='formButtons'>
             <button
@@ -221,6 +336,7 @@ if(loading) {
               No
             </button>
           </div>
+
           <label className='formLabel'>Address</label>
           <textarea
             className='formInputAddress'
@@ -230,7 +346,8 @@ if(loading) {
             onChange={onMutate}
             required
           />
-          {!geoEnabled && (
+
+          {!geolocationEnabled && (
             <div className='formLatLng flex'>
               <div>
                 <label className='formLabel'>Latitude</label>
@@ -257,7 +374,7 @@ if(loading) {
             </div>
           )}
 
-<label className='formLabel'>Offer</label>
+          <label className='formLabel'>Offer</label>
           <div className='formButtons'>
             <button
               className={offer ? 'formButtonActive' : 'formButton'}
@@ -312,7 +429,7 @@ if(loading) {
             </>
           )}
 
-<label className='formLabel'>Images</label>
+          <label className='formLabel'>Images</label>
           <p className='imagesInfo'>
             The first image will be the cover (max 6).
           </p>
@@ -329,13 +446,10 @@ if(loading) {
           <button type='submit' className='primaryButton createListingButton'>
             Create Listing
           </button>
-
-
-            </form>
-        </main>
-      
+        </form>
+      </main>
     </div>
   )
 }
 
-export default Createlisting
+export default CreateListing
