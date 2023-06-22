@@ -9,7 +9,7 @@ html::-webkit-scrollbar {
 
 body {
   font-family: 'Montserrat', sans-serif;
-  background-color: #bfd0f0;
+  background-color: #f2f4f8;
   margin: 0;
   box-sizing: border-box;
 }
@@ -78,6 +78,7 @@ button {
   top: -3%;
   right: -2%;
 }
+
 .editIcon {
   cursor: pointer;
   position: absolute;
@@ -117,6 +118,10 @@ button {
   align-items: center;
 }
 
+.pageContainer{
+  margin-bottom: 10rem;
+}
+
 .loadingSpinner {
   width: 64px;
   height: 64px;
@@ -139,6 +144,16 @@ button {
   font-weight: 800;
 }
 
+.pageExplore {
+  display: flex;
+  justify-content: space-between;
+}
+
+.pageSubHeader {
+  font-size: 2rem;
+  font-weight: 900;
+  color: #9ab0b3;
+}
 .navbar {
   position: fixed;
   left: 0;
@@ -301,7 +316,7 @@ button {
     margin-bottom: 10rem;
   }
 }
-@media (max-height: 536) {
+@media (max-height: 536px) {
   .explore {
     margin-bottom: 10rem;
   }
