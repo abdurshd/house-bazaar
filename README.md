@@ -1,6 +1,1 @@
-# Getting Started with Create React App
-
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
-
-
-And this is published in https://house-bazaar.vercel.app/
+This app is a full stack (with firebase) kind of AirBnb, where you can see house options, login, do CRUD operation with posts related to rent or sale of houses. this is published in https://house-bazaar.vercel.app/
