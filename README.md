@@ -2,6 +2,7 @@ This app is a full stack (with firebase) kind of AirBnb, where you can see house
 
 ## Running locally
 (requires .env variables for firebase use)
+
 After installing the dependencies as follow:
 
 ```sh
