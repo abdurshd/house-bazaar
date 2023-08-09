@@ -49,7 +49,7 @@ function Slider() {
       <>
         <p className='exploreHeading'>Recommended</p>
 
-        <Swiper slidesPerView={1} pagination={{ clickable: true }}>
+        <Swiper slidesPerView={1} pagination={{ clickable: true }} navigation={{ nextEl: '.swiper-button-next', prevEl: '.swiper-button-prev' }}>
           {listings.map(({ data, id }) => (
             <SwiperSlide
               key={id}
@@ -70,6 +70,8 @@ function Slider() {
               </div>
             </SwiperSlide>
           ))}
+          <div className="swiper-button-next"></div>
+          <div className="swiper-button-prev"></div>
         </Swiper>
       </>
     )
