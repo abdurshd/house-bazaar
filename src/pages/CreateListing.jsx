@@ -24,7 +24,11 @@ function CreateListing() {
     bathrooms: 1,
     parking: false,
     furnished: false,
-    address: '',
+    street: '',
+    city: '',
+    state: '',
+    zipcode: '',
+    country: '',
     offer: false,
     regularPrice: 0,
     discountedPrice: 0,
@@ -40,7 +44,7 @@ function CreateListing() {
     bathrooms,
     parking,
     furnished,
-    address,
+    street,
     offer,
     regularPrice,
     discountedPrice,
@@ -52,6 +56,7 @@ function CreateListing() {
   const auth = getAuth();
   const navigate = useNavigate();
   const isMounted = useRef(true);
+  const [countries, setCountries] = useState([]);
 
   useEffect(() => {
     if (isMounted) {
@@ -70,12 +75,39 @@ function CreateListing() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMounted]);
 
+  useEffect(() => {
+    const fetchCountries = async () => {
+      try {
+        const response = await fetch('https://restcountries.com/v3.1/all');
+        const data = await response.json();
+        
+        // Sort countries by name
+        const sortedCountries = data
+          .map(country => ({
+            code: country.cca2,
+            name: country.name.common
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+        setCountries(sortedCountries);
+      } catch (error) {
+        console.error('Error fetching countries:', error);
+        toast.error('Failed to load countries list');
+      }
+    };
+
+    fetchCountries();
+  }, []);
+
   const onSubmit = async (e) => {
     e.preventDefault();
 
     setLoading(true);
 
-    if (discountedPrice >= regularPrice) {
+    const discountedPriceNum = parseFloat(discountedPrice);
+    const regularPriceNum = parseFloat(regularPrice);
+
+    if (discountedPriceNum >= regularPriceNum) {
       setLoading(false);
       toast.error('Discounted price needs to be less than regular price');
       return;
@@ -91,8 +123,9 @@ function CreateListing() {
     let location;
 
     if (geolocationEnabled) {
+      const fullAddress = `${formData.street}, ${formData.city}, ${formData.state} ${formData.zipcode}, ${formData.country}`;
       const response = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?address=${address}&key=${process.env.REACT_APP_GEOCODE_API_KEY}`,
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(fullAddress)}&key=${process.env.REACT_APP_GEOCODE_API_KEY}`,
       );
 
       const data = await response.json();
@@ -169,9 +202,13 @@ function CreateListing() {
       timestamp: serverTimestamp(),
     };
 
-    formDataCopy.location = address;
+    formDataCopy.location = street;
     delete formDataCopy.images;
-    delete formDataCopy.address;
+    delete formDataCopy.street;
+    delete formDataCopy.city;
+    delete formDataCopy.state;
+    delete formDataCopy.zipcode;
+    delete formDataCopy.country;
     !formDataCopy.offer && delete formDataCopy.discountedPrice;
 
     const docRef = await addDoc(collection(db, 'listinglar'), formDataCopy);
@@ -334,15 +371,66 @@ function CreateListing() {
             </button>
           </div>
 
-          <label className="formLabel">Address</label>
-          <textarea
-            className="formInputAddress"
-            type="text"
-            id="address"
-            value={address}
-            onChange={onMutate}
-            required
-          />
+          <div className="formAddressContainer">
+            <label className="formLabel">Address</label>
+            <div className="addressInputs">
+              <input
+                className="formInputAddress"
+                type="text"
+                id="street"
+                placeholder="Street Address"
+                value={formData.street}
+                onChange={onMutate}
+                required
+              />
+              <input
+                className="formInputAddress"
+                type="text"
+                id="city"
+                placeholder="City"
+                value={formData.city}
+                onChange={onMutate}
+                required
+              />
+              <div className="addressInputRow">
+                <input
+                  className="formInputAddress"
+                  type="text"
+                  id="state"
+                  placeholder="State/Province"
+                  value={formData.state}
+                  onChange={onMutate}
+                  required
+                />
+                <input
+                  className="formInputAddress"
+                  type="text"
+                  id="zipcode"
+                  placeholder="Postal/Zip Code"
+                  value={formData.zipcode}
+                  onChange={onMutate}
+                  required
+                />
+              </div>
+              <select
+                className="formInputAddress"
+                id="country"
+                value={formData.country}
+                onChange={onMutate}
+                required
+              >
+                <option value="">Select Country</option>
+                {countries.map((country) => (
+                  <option key={country.code} value={country.code}>
+                    {country.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p className="addressHelper">
+              Example: 123 Main St, New York, NY 10001, USA
+            </p>
+          </div>
 
           {!geolocationEnabled && (
             <div className="formLatLng flex">

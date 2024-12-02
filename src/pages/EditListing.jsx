@@ -12,12 +12,14 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { v4 as uuidv4 } from 'uuid';
 import Spinner from '../components/Spinner';
+import { useLoadingWithRetry } from '../hooks/useLoadingWithRetry';
 
 function EditListing() {
-  // eslint-disable-next-line
-  const [geolocationEnabled, setGeolocationEnabled] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [listing, setListing] = useState(false);
+  const { loading, error, executeWithRetry } = useLoadingWithRetry();
+  const [geolocationEnabled] = useState(() => {
+    return process.env.REACT_APP_GEOCODE_API_KEY ? true : false;
+  });
+  const [listing, setListing] = useState(null);
   const [formData, setFormData] = useState({
     type: 'rent',
     name: '',
@@ -25,7 +27,11 @@ function EditListing() {
     bathrooms: 1,
     parking: false,
     furnished: false,
-    address: '',
+    street: '',
+    city: '',
+    state: '',
+    zipcode: '',
+    country: '',
     offer: false,
     regularPrice: 0,
     discountedPrice: 0,
@@ -41,7 +47,6 @@ function EditListing() {
     bathrooms,
     parking,
     furnished,
-    address,
     offer,
     regularPrice,
     discountedPrice,
@@ -54,6 +59,7 @@ function EditListing() {
   const navigate = useNavigate();
   const params = useParams();
   const isMounted = useRef(true);
+  const [countries, setCountries] = useState([]);
 
   // Redirect if listing is not user's
   useEffect(() => {
@@ -65,22 +71,32 @@ function EditListing() {
 
   // Fetch listing to edit
   useEffect(() => {
-    setLoading(true);
     const fetchListing = async () => {
-      const docRef = doc(db, 'listinglar', params.listingId);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        setListing(docSnap.data());
-        setFormData({ ...docSnap.data(), address: docSnap.data().location });
-        setLoading(false);
-      } else {
-        navigate('/');
-        toast.error('Listing does not exist');
-      }
+      const fetchFunction = async () => {
+        const docRef = doc(db, 'listinglar', params.listingId);
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+          setListing(docSnap.data());
+          const listingData = docSnap.data();
+          setFormData({
+            ...listingData,
+            street: listingData.location,
+            city: '',
+            state: '',
+            zipcode: '',
+            country: '',
+          });
+          return listingData;
+        }
+        throw new Error('Listing does not exist');
+      };
+
+      await executeWithRetry(fetchFunction);
     };
 
     fetchListing();
-  }, [params.listingId, navigate]);
+  }, [params.listingId, executeWithRetry]);
 
   // Sets userRef to logged in user
   useEffect(() => {
@@ -100,118 +116,148 @@ function EditListing() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMounted]);
 
+  useEffect(() => {
+    const fetchCountries = async () => {
+      try {
+        const response = await fetch('https://restcountries.com/v3.1/all');
+        const data = await response.json();
+        
+        // Sort countries by name
+        const sortedCountries = data
+          .map(country => ({
+            code: country.cca2,
+            name: country.name.common
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+        setCountries(sortedCountries);
+      } catch (error) {
+        console.error('Error fetching countries:', error);
+        toast.error('Failed to load countries list');
+      }
+    };
+
+    fetchCountries();
+  }, []);
+
   const onSubmit = async (e) => {
     e.preventDefault();
 
-    setLoading(true);
+    const submitFunction = async () => {
+      try {
+        if (discountedPrice >= regularPrice) {
+          toast.error('Discounted price needs to be less than regular price');
+          return;
+        }
 
-    if (discountedPrice >= regularPrice) {
-      setLoading(false);
-      toast.error('Discounted price needs to be less than regular price');
-      return;
-    }
+        if (images.length > 6) {
+          toast.error('Max 6 images');
+          return;
+        }
 
-    if (images.length > 6) {
-      setLoading(false);
-      toast.error('Max 6 images');
-      return;
-    }
+        let geolocation = {};
+        let location;
 
-    let geolocation = {};
-    let location;
+        if (geolocationEnabled) {
+          const fullAddress = `${formData.street}, ${formData.city}, ${formData.state} ${formData.zipcode}, ${formData.country}`;
+          const response = await fetch(
+            `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(fullAddress)}&key=${process.env.REACT_APP_GEOCODE_API_KEY}`,
+          );
 
-    if (geolocationEnabled) {
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?address=${address}&key=${process.env.REACT_APP_GEOCODE_API_KEY}`,
-      );
+          const data = await response.json();
 
-      const data = await response.json();
+          geolocation.lat = data.results[0]?.geometry.location.lat ?? 0;
+          geolocation.lng = data.results[0]?.geometry.location.lng ?? 0;
 
-      geolocation.lat = data.results[0]?.geometry.location.lat ?? 0;
-      geolocation.lng = data.results[0]?.geometry.location.lng ?? 0;
+          location =
+            data.status === 'ZERO_RESULTS'
+              ? undefined
+              : data.results[0]?.formatted_address;
 
-      location =
-        data.status === 'ZERO_RESULTS'
-          ? undefined
-          : data.results[0]?.formatted_address;
+          if (location === undefined || location.includes('undefined')) {
+            toast.error('Please enter a correct address');
+            return;
+          }
+        } else {
+          geolocation.lat = latitude;
+          geolocation.lng = longitude;
+        }
 
-      if (location === undefined || location.includes('undefined')) {
-        setLoading(false);
-        toast.error('Please enter a correct address');
-        return;
+        // Store image in firebase
+        const storeImage = async (image) => {
+          return new Promise((resolve, reject) => {
+            const storage = getStorage();
+            const fileName = `${auth.currentUser.uid}-${image.name}-${uuidv4()}`;
+
+            const storageRef = ref(storage, 'images/' + fileName);
+
+            const uploadTask = uploadBytesResumable(storageRef, image);
+
+            uploadTask.on(
+              'state_changed',
+              (snapshot) => {
+                const progress =
+                  (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                console.log('Upload is ' + progress + '% done');
+                switch (snapshot.state) {
+                  case 'paused':
+                    console.log('Upload is paused');
+                    break;
+                  case 'running':
+                    console.log('Upload is running');
+                    break;
+                  default:
+                    break;
+                }
+              },
+              (error) => {
+                reject(error);
+              },
+              () => {
+                // Handle successful uploads on complete
+                // For instance, get the download URL: https://firebasestorage.googleapis.com/...
+                getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
+                  resolve(downloadURL);
+                });
+              },
+            );
+          });
+        };
+
+        const imgUrls = await Promise.all(
+          [...images].map((image) => storeImage(image)),
+        ).catch(() => {
+          toast.error('Images not uploaded');
+          return;
+        });
+
+        const formDataCopy = {
+          ...formData,
+          imgUrls,
+          geolocation,
+          timestamp: serverTimestamp(),
+        };
+
+        formDataCopy.location = formData.street;
+        delete formDataCopy.images;
+        delete formDataCopy.street;
+        delete formDataCopy.city;
+        delete formDataCopy.state;
+        delete formDataCopy.zipcode;
+        delete formDataCopy.country;
+        !formDataCopy.offer && delete formDataCopy.discountedPrice;
+
+        // Update listing
+        const docRef = doc(db, 'listinglar', params.listingId);
+        await updateDoc(docRef, formDataCopy);
+        toast.success('Listing saved');
+        navigate(`/category/${formDataCopy.type}/${docRef.id}`);
+      } catch (error) {
+        toast.error('Error updating listing: ' + error.message);
       }
-    } else {
-      geolocation.lat = latitude;
-      geolocation.lng = longitude;
-    }
-
-    // Store image in firebase
-    const storeImage = async (image) => {
-      return new Promise((resolve, reject) => {
-        const storage = getStorage();
-        const fileName = `${auth.currentUser.uid}-${image.name}-${uuidv4()}`;
-
-        const storageRef = ref(storage, 'images/' + fileName);
-
-        const uploadTask = uploadBytesResumable(storageRef, image);
-
-        uploadTask.on(
-          'state_changed',
-          (snapshot) => {
-            const progress =
-              (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-            console.log('Upload is ' + progress + '% done');
-            switch (snapshot.state) {
-              case 'paused':
-                console.log('Upload is paused');
-                break;
-              case 'running':
-                console.log('Upload is running');
-                break;
-              default:
-                break;
-            }
-          },
-          (error) => {
-            reject(error);
-          },
-          () => {
-            // Handle successful uploads on complete
-            // For instance, get the download URL: https://firebasestorage.googleapis.com/...
-            getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-              resolve(downloadURL);
-            });
-          },
-        );
-      });
     };
 
-    const imgUrls = await Promise.all(
-      [...images].map((image) => storeImage(image)),
-    ).catch(() => {
-      setLoading(false);
-      toast.error('Images not uploaded');
-      return;
-    });
-
-    const formDataCopy = {
-      ...formData,
-      imgUrls,
-      geolocation,
-      timestamp: serverTimestamp(),
-    };
-
-    formDataCopy.location = address;
-    delete formDataCopy.images;
-    delete formDataCopy.address;
-    !formDataCopy.offer && delete formDataCopy.discountedPrice;
-
-    // Update listing
-    const docRef = doc(db, 'listinglar', params.listingId);
-    await updateDoc(docRef, formDataCopy);
-    setLoading(false);
-    toast.success('Listing saved');
-    navigate(`/category/${formDataCopy.type}/${docRef.id}`);
+    await executeWithRetry(submitFunction);
   };
 
   const onMutate = (e) => {
@@ -242,7 +288,7 @@ function EditListing() {
   };
 
   if (loading) {
-    return <Spinner />;
+    return <Spinner error={error} />;
   }
 
   return (
@@ -368,15 +414,66 @@ function EditListing() {
             </button>
           </div>
 
-          <label className="formLabel">Address</label>
-          <textarea
-            className="formInputAddress"
-            type="text"
-            id="address"
-            value={address}
-            onChange={onMutate}
-            required
-          />
+          <div className="formAddressContainer">
+            <label className="formLabel">Address</label>
+            <div className="addressInputs">
+              <input
+                className="formInputAddress"
+                type="text"
+                id="street"
+                placeholder="Street Address"
+                value={formData.street}
+                onChange={onMutate}
+                required
+              />
+              <input
+                className="formInputAddress"
+                type="text"
+                id="city"
+                placeholder="City"
+                value={formData.city}
+                onChange={onMutate}
+                required
+              />
+              <div className="addressInputRow">
+                <input
+                  className="formInputAddress"
+                  type="text"
+                  id="state"
+                  placeholder="State/Province"
+                  value={formData.state}
+                  onChange={onMutate}
+                  required
+                />
+                <input
+                  className="formInputAddress"
+                  type="text"
+                  id="zipcode"
+                  placeholder="Postal/Zip Code"
+                  value={formData.zipcode}
+                  onChange={onMutate}
+                  required
+                />
+              </div>
+              <select
+                className="formInputAddress"
+                id="country"
+                value={formData.country}
+                onChange={onMutate}
+                required
+              >
+                <option value="">Select Country</option>
+                {countries.map((country) => (
+                  <option key={country.code} value={country.code}>
+                    {country.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p className="addressHelper">
+              Example: 123 Main St, New York, NY 10001, USA
+            </p>
+          </div>
 
           {!geolocationEnabled && (
             <div className="formLatLng flex">

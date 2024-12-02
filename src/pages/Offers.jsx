@@ -9,37 +9,31 @@ import {
   startAfter,
 } from 'firebase/firestore';
 import { db } from '../firebase.config';
-import { toast } from 'react-toastify';
 import Spinner from '../components/Spinner';
 import ListingItem from '../components/ListingItem';
+import { useLoadingWithRetry } from '../hooks/useLoadingWithRetry';
 
 function Offers() {
   const [listings, setListings] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [lastFetchedListing, setLastFetchedListing] = useState(null);
+  const { loading, error, executeWithRetry } = useLoadingWithRetry();
 
   useEffect(() => {
     const fetchListings = async () => {
-      try {
-        // Get reference
+      const fetchFunction = async () => {
         const listingsRef = collection(db, 'listinglar');
-
-        // Create a query
         const q = query(
           listingsRef,
           where('offer', '==', true),
           orderBy('timestamp', 'desc'),
-          limit(10),
+          limit(10)
         );
 
-        // Execute query
         const querySnap = await getDocs(q);
-
         const lastVisible = querySnap.docs[querySnap.docs.length - 1];
         setLastFetchedListing(lastVisible);
 
         const listings = [];
-
         querySnap.forEach((doc) => {
           return listings.push({
             id: doc.id,
@@ -48,38 +42,32 @@ function Offers() {
         });
 
         setListings(listings);
-        setLoading(false);
-      } catch (error) {
-        toast.error('Could not fetch listings');
-      }
+        return listings;
+      };
+
+      await executeWithRetry(fetchFunction);
     };
 
     fetchListings();
-  }, []);
+  }, [executeWithRetry]);
 
   // Pagination / Load More
   const onFetchMoreListings = async () => {
-    try {
-      // Get reference
+    const fetchMoreFunction = async () => {
       const listingsRef = collection(db, 'listinglar');
-
-      // Create a query
       const q = query(
         listingsRef,
         where('offer', '==', true),
         orderBy('timestamp', 'desc'),
         startAfter(lastFetchedListing),
-        limit(10),
+        limit(10)
       );
 
-      // Execute query
       const querySnap = await getDocs(q);
-
       const lastVisible = querySnap.docs[querySnap.docs.length - 1];
       setLastFetchedListing(lastVisible);
 
       const listings = [];
-
       querySnap.forEach((doc) => {
         return listings.push({
           id: doc.id,
@@ -88,11 +76,15 @@ function Offers() {
       });
 
       setListings((prevState) => [...prevState, ...listings]);
-      setLoading(false);
-    } catch (error) {
-      toast.error('Could not fetch listings');
-    }
+      return listings;
+    };
+
+    await executeWithRetry(fetchMoreFunction);
   };
+
+  if (loading) {
+    return <Spinner error={error} />;
+  }
 
   return (
     <div className="category">
@@ -101,9 +93,7 @@ function Offers() {
         <p className="pageSubHeader">HouseBazaar</p>
       </header>
 
-      {loading ? (
-        <Spinner />
-      ) : listings && listings.length > 0 ? (
+      {listings && listings.length > 0 ? (
         <>
           <main>
             <ul className="categoryListings">

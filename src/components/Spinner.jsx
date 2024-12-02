@@ -1,10 +1,11 @@
 import React from 'react';
-import './Spinner.css'; // Import the CSS for styling
+import './Spinner.css';
 
-const Spinner = () => {
+const Spinner = ({ error }) => {
   return (
     <div className="loadingSpinnerContainer">
       <div className="loadingSpinner"></div>
+      {error && <p className="loadingError">{error}</p>}
     </div>
   );
 };

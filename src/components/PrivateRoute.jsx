@@ -1,15 +1,11 @@
 import { Navigate, Outlet } from 'react-router-dom';
-import { useAuthStatus } from '../hooks/useAuthStatus';
-import Spinner from './Spinner';
+import { useRecoilValue } from 'recoil';
+import { userState } from '../atoms/authAtom';
 
 const PrivateRoute = () => {
-  const { loggedIn, checkingStatus } = useAuthStatus();
-
-  if (checkingStatus) {
-    return <Spinner />;
-  }
-
-  return loggedIn ? <Outlet /> : <Navigate to="/sign-in" />;
+  const user = useRecoilValue(userState);
+  console.log('Current user state:', user);
+  return user ? <Outlet /> : <Navigate to="/sign-in" />;
 };
 
 export default PrivateRoute;

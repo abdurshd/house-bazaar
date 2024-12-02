@@ -1,47 +1,51 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '../firebase.config';
+import { useLoadingWithRetry } from '../hooks/useLoadingWithRetry';
+import Spinner from './Spinner';
 import SwiperCore, { Navigation, Pagination, Scrollbar, A11y } from 'swiper';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import 'swiper/swiper-bundle.css';
-import Spinner from './Spinner';
+
 SwiperCore.use([Navigation, Pagination, Scrollbar, A11y]);
 
 function Slider() {
-  const [loading, setLoading] = useState(true);
   const [listings, setListings] = useState(null);
-
+  const { loading, error, executeWithRetry } = useLoadingWithRetry();
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetchListings = async () => {
-      const listingsRef = collection(db, 'listinglar');
-      const q = query(listingsRef, orderBy('timestamp', 'desc'), limit(5));
-      const querySnap = await getDocs(q);
+      const fetchFunction = async () => {
+        const listingsRef = collection(db, 'listinglar');
+        const q = query(listingsRef, orderBy('timestamp', 'desc'), limit(5));
+        const querySnap = await getDocs(q);
 
-      let listings = [];
-
-      querySnap.forEach((doc) => {
-        return listings.push({
-          id: doc.id,
-          data: doc.data(),
+        let listings = [];
+        querySnap.forEach((doc) => {
+          return listings.push({
+            id: doc.id,
+            data: doc.data(),
+          });
         });
-      });
 
-      setListings(listings);
-      setLoading(false);
+        setListings(listings);
+        return listings;
+      };
+
+      await executeWithRetry(fetchFunction);
     };
 
     fetchListings();
-  }, []);
+  }, [executeWithRetry]);
 
   if (loading) {
-    return <Spinner />;
+    return <Spinner error={error} />;
   }
 
-  if (listings.length === 0) {
-    return <></>;
+  if (listings?.length === 0) {
+    return <h3> There are no listings yet</h3>;
   }
 
   return (
@@ -57,7 +61,7 @@ function Slider() {
             prevEl: '.swiper-button-prev',
           }}
         >
-          {listings.map(({ data, id }) => (
+          {listings?.map(({ data, id }) => (
             <SwiperSlide
               key={id}
               onClick={() => navigate(`/category/${data.type}/${id}`)}

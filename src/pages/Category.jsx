@@ -13,36 +13,31 @@ import { db } from '../firebase.config';
 import { toast } from 'react-toastify';
 import Spinner from '../components/Spinner';
 import ListingItem from '../components/ListingItem';
+import { useLoadingWithRetry } from '../hooks/useLoadingWithRetry';
 
 function Category() {
   const [listings, setListings] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { loading, error, executeWithRetry } = useLoadingWithRetry();
   const [lastFetchedListing, setLastFetchedListing] = useState(null);
 
   const params = useParams();
 
   useEffect(() => {
     const fetchListings = async () => {
-      try {
-        // Get reference
+      const fetchFunction = async () => {
         const listingsRef = collection(db, 'listinglar');
-
-        // Create a query
         const q = query(
           listingsRef,
           where('type', '==', params.categoryName),
           orderBy('timestamp', 'desc'),
-          limit(10),
+          limit(10)
         );
 
-        // Execute query
         const querySnap = await getDocs(q);
-
         const lastVisible = querySnap.docs[querySnap.docs.length - 1];
         setLastFetchedListing(lastVisible);
 
         const listings = [];
-
         querySnap.forEach((doc) => {
           return listings.push({
             id: doc.id,
@@ -51,14 +46,18 @@ function Category() {
         });
 
         setListings(listings);
-        setLoading(false);
-      } catch (error) {
-        toast.error('Could not fetch listings');
-      }
+        return listings;
+      };
+
+      await executeWithRetry(fetchFunction);
     };
 
     fetchListings();
-  }, [params.categoryName]);
+  }, [params.categoryName, executeWithRetry]);
+
+  if (loading) {
+    return <Spinner error={error} />;
+  }
 
   // Pagination / Load More
   const onFetchMoreListings = async () => {
@@ -91,7 +90,6 @@ function Category() {
       });
 
       setListings((prevState) => [...prevState, ...listings]);
-      setLoading(false);
     } catch (error) {
       toast.error('Could not fetch listings');
     }
@@ -107,9 +105,7 @@ function Category() {
         </p>
       </header>
 
-      {loading ? (
-        <Spinner />
-      ) : listings && listings.length > 0 ? (
+      {listings && listings.length > 0 ? (
         <>
           <main>
             <ul className="categoryListings">

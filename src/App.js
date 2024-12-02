@@ -14,34 +14,44 @@ import CreateListing from './pages/CreateListing';
 import EditListing from './pages/EditListing';
 import Listing from './pages/Listing';
 import Contact from './pages/Contact';
+import { RecoilRoot } from 'recoil';
+import { useAuth } from './hooks/useAuth';
+
+// Create a wrapper component that uses the useAuth hook
+function AuthWrapper({ children }) {
+  useAuth();
+  return children;
+}
 
 function App() {
   return (
-    <>
-      <Router>
-        <Routes>
-          <Route path="/" element={<Explore />} />
-          <Route path="/offers" element={<Offers />} />
-          <Route path="/category/:categoryName" element={<Category />} />
-          <Route path="/profile" element={<PrivateRoute />}>
-            <Route path="/profile" element={<Profile />} />
-          </Route>
-          <Route path="/sign-in" element={<SignIn />} />
-          <Route path="/sign-up" element={<SignUp />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/create-listing" element={<CreateListing />} />
-          <Route path="/edit-listing/:listingId" element={<EditListing />} />
-          <Route
-            path="/category/:categoryName/:listingId"
-            element={<Listing />}
-          />
-          <Route path="/contact/:landlordId" element={<Contact />} />
-        </Routes>
-        <Navbar />
-      </Router>
+    <RecoilRoot>
+      <AuthWrapper>
+        <Router>
+          <Routes>
+            <Route path="/" element={<Explore />} />
+            <Route path="/offers" element={<Offers />} />
+            <Route path="/category/:categoryName" element={<Category />} />
+            <Route path="/profile" element={<PrivateRoute />}>
+              <Route path="/profile" element={<Profile />} />
+            </Route>
+            <Route path="/sign-in" element={<SignIn />} />
+            <Route path="/sign-up" element={<SignUp />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/create-listing" element={<CreateListing />} />
+            <Route path="/edit-listing/:listingId" element={<EditListing />} />
+            <Route
+              path="/category/:categoryName/:listingId"
+              element={<Listing />}
+            />
+            <Route path="/contact/:landlordId" element={<Contact />} />
+          </Routes>
+          <Navbar />
+        </Router>
 
-      <ToastContainer />
-    </>
+        <ToastContainer />
+      </AuthWrapper>
+    </RecoilRoot>
   );
 }
 
